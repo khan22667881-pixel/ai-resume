@@ -42,12 +42,23 @@ LABELS = {
 # --------------------------------------------------------------------------
 # Text extraction
 # --------------------------------------------------------------------------
+def _missing_package(package: str) -> str:
+    return (
+        f"The '{package}' package is not installed in the environment running this app. "
+        "Run `pip install -r requirements.txt` and restart with `python -m streamlit run app.py`. "
+        "On Streamlit Cloud, make sure requirements.txt is in the repo root, then reboot the app."
+    )
+
+
 def extract_text(file_bytes: bytes, filename: str) -> str:
     """Return plain text from a PDF, DOCX or TXT file."""
     name = filename.lower()
 
     if name.endswith(".pdf"):
-        from pypdf import PdfReader
+        try:
+            from pypdf import PdfReader
+        except ImportError:
+            raise ValueError(_missing_package("pypdf"))
 
         reader = PdfReader(io.BytesIO(file_bytes))
         if reader.is_encrypted:
@@ -59,7 +70,10 @@ def extract_text(file_bytes: bytes, filename: str) -> str:
         return "\n".join(pages).strip()
 
     if name.endswith(".docx"):
-        from docx import Document
+        try:
+            from docx import Document
+        except ImportError:
+            raise ValueError(_missing_package("python-docx"))
 
         doc = Document(io.BytesIO(file_bytes))
         parts = [p.text for p in doc.paragraphs if p.text.strip()]
@@ -232,8 +246,11 @@ def parse_response(raw: str) -> dict:
 
 def analyze_resume(api_key: str, model: str, resume_text: str, job_description: str) -> dict:
     """Call Gemini and return the parsed analysis."""
-    from google import genai
-    from google.genai import types
+    try:
+        from google import genai
+        from google.genai import types
+    except ImportError:
+        raise ValueError(_missing_package("google-genai"))
 
     checks = basic_checks(resume_text)
     prompt = build_prompt(resume_text, job_description, checks)
