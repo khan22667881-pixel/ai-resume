@@ -10,11 +10,13 @@ Run locally:  streamlit run app.py
 
 from __future__ import annotations
 
-
+import importlib
 import io
 import json
 import os
 import re
+import subprocess
+import sys
 
 import streamlit as st
 
@@ -45,10 +47,31 @@ LABELS = {
 # --------------------------------------------------------------------------
 def _missing_package(package: str) -> str:
     return (
-        f"The '{package}' package is not installed in the environment running this app. "
-        "Run `pip install -r requirements.txt` and restart with `python -m streamlit run app.py`. "
+        f"The '{package}' package is missing and could not be installed automatically. "
+        f"This app is running on this Python: {sys.executable}\n"
+        f"Install it for that exact Python with:  {sys.executable} -m pip install {package}  "
+        "(or `python -m pip install -r requirements.txt`), then restart the app. "
         "On Streamlit Cloud, make sure requirements.txt is in the repo root, then reboot the app."
     )
+
+
+def _import_or_install(module_name: str, package: str):
+    """Import a module; if it is missing, pip-install it into THIS Python and retry."""
+    try:
+        return importlib.import_module(module_name)
+    except ImportError:
+        pass
+    try:
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "--retries", "1", "--timeout", "30", package],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=300,
+        )
+        importlib.invalidate_caches()
+        return importlib.import_module(module_name)
+    except Exception:
+        raise ValueError(_missing_package(package))
 
 
 def extract_text(file_bytes: bytes, filename: str) -> str:
@@ -56,10 +79,7 @@ def extract_text(file_bytes: bytes, filename: str) -> str:
     name = filename.lower()
 
     if name.endswith(".pdf"):
-        try:
-            from pypdf import PdfReader
-        except ImportError:
-            raise ValueError(_missing_package("pypdf"))
+        PdfReader = _import_or_install("pypdf", "pypdf").PdfReader
 
         reader = PdfReader(io.BytesIO(file_bytes))
         if reader.is_encrypted:
@@ -71,10 +91,7 @@ def extract_text(file_bytes: bytes, filename: str) -> str:
         return "\n".join(pages).strip()
 
     if name.endswith(".docx"):
-        try:
-            from docx import Document
-        except ImportError:
-            raise ValueError(_missing_package("python-docx"))
+        Document = _import_or_install("docx", "python-docx").Document
 
         doc = Document(io.BytesIO(file_bytes))
         parts = [p.text for p in doc.paragraphs if p.text.strip()]
@@ -247,11 +264,8 @@ def parse_response(raw: str) -> dict:
 
 def analyze_resume(api_key: str, model: str, resume_text: str, job_description: str) -> dict:
     """Call Gemini and return the parsed analysis."""
-    try:
-        from google import genai
-        from google.genai import types
-    except ImportError:
-        raise ValueError(_missing_package("google-genai"))
+    genai = _import_or_install("google.genai", "google-genai")
+    types = importlib.import_module("google.genai.types")
 
     checks = basic_checks(resume_text)
     prompt = build_prompt(resume_text, job_description, checks)
