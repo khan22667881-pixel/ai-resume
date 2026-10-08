@@ -9,8 +9,7 @@ Run locally:  streamlit run app.py
 """
 
 from __future__ import annotations
-pip install -r requirements.txt
-python -m streamlit run app.py
+
 
 import io
 import json
