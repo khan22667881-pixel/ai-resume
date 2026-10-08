@@ -1,4 +1,3 @@
-# ai-resume
 # 📄 ATS Resume Checker
 
 Upload a resume (PDF, DOCX or TXT), optionally paste a job description, and get an
